@@ -97,3 +97,7 @@ Resources on "TUN/TAP device not available inside docker container"
   - [Create tun device within a container](https://groups.google.com/forum/#!topic/docker-user/2jFeDGJj36E)
   - [DOCKER + JOYENT + OPENVPN = BLISS](http://blog.docker.com/2013/09/docker-joyent-openvpn-bliss/)
   - [Installing new gentoo kernel in docker container](http://stackoverflow.com/questions/25484090/installing-new-gentoo-kernel-in-docker-container)
+
+Credits
+-------
+* https://github.com/davide/docker-zerotier
