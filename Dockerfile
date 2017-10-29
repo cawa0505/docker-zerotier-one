@@ -1,26 +1,59 @@
 # Dockerfile for ZeroTierOne
 
-FROM ubuntu:14.04
+FROM alpine:latest as builder
 
-MAINTAINER Davide Marquês <nesrait@gmail.com>
+ARG ZT_PKGVER="1.2.4"
+ARG ZT_PKGREL="1"
 
-RUN apt-get update && apt-get install -y curl
+LABEL maintainer="Riadh Habbach <habbachi.riadh@gmail.com>"
+LABEL version=$ZT_PKGVER
+LABEL description="Containerized ZeroTier One for use on CoreOS or other Docker-only Linux hosts."
 
-RUN apt-get -y install supervisor && \
+# Build deps.
+RUN apk add --no-cache --no-progress abuild && \
+    apk add --no-cache --no-progress build-base && \
+    apk add --no-cache --no-progress gcc binutils
+
+RUN adduser -D abuilder && \
+    addgroup abuilder abuild && \
+    echo "abuilder    ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER abuilder
+
+ADD ./zerotier-apkbuild /home/abuilder/zerotier-apkbuild/
+
+RUN mkdir -p /var/cache/distfiles && \
+    sudo chgrp abuild /var/cache/distfiles && \
+    sudo chmod g+w /var/cache/distfiles
+
+WORKDIR /home/abuilder/zerotier-apkbuild/
+
+RUN sudo chown -R abuilder /home/abuilder/zerotier-apkbuild/ && \
+    sudo apk update && \
+    abuild-keygen -a -i && \
+    abuild deps && \
+    abuild checksum && \
+    abuild -rq -P /home/abuilder/target
+
+FROM alpine:latest as runner
+
+ARG ZT_PKGVER="1.2.4"
+ARG ZT_PKGREL="1"
+
+# Install required packages: supervisor, make.
+RUN apk add --no-cache --no-progress supervisor && \
     mkdir -p /var/log/supervisor
 
-RUN curl -s https://www.zerotier.com/dist/ZeroTierOneInstaller-linux-x64 > ZeroTierOneInstaller-linux-x64.sh && \
-    chmod a+x ZeroTierOneInstaller-linux-x64.sh && \
-    ./ZeroTierOneInstaller-linux-x64.sh && \
-    rm ZeroTierOneInstaller-linux-x64.sh && \
-    sudo service zerotier-one stop && \
-    rm /var/lib/zerotier-one/zerotier-one.pid && \
-    echo "manual" >> /etc/init/zerotier-one.override && \
-    rm /var/lib/zerotier-one/identity.secret && \
-    rm /var/lib/zerotier-one/identity.public
-
-# use supervisord to start zerotier
+# Setup supervisord configuration files.
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+COPY --from=builder /etc/apk/keys /etc/apk/keys
+COPY --from=builder /home/abuilder/target/abuilder/*/ /root/zerotierone
+
+RUN cd /root/zerotierone && \
+    ls -ali && \
+    apk add --no-cache --no-progress zerotier-one-$ZT_PKGVER-$ZT_PKGREL.apk && \
+    rm -rf /root/zerotierone
 
 EXPOSE 9993/udp
 
